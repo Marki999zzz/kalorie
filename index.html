@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Licznik Kalorii</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#eef2ec">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kalorie">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one-column phone diary; summary dial on top, meal list, fixed bottom bar with add button + tabs; bottom sheets for adding/editing. */
+:root{
+  --bg:#eef2ec; --surface:#ffffff; --surface-2:#e3e9e1; --line:#d3dccf;
+  --ink:#1b231e; --muted:#5e6b62; --soft:#88958b;
+  --accent:#2f6b4f; --accent-ink:#ffffff; --accent-soft:#d6e8dc;
+  --warn:#b8641a; --warn-soft:#f6e4cf; --over:#b43a2e; --over-soft:#f7dcd8;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --r:16px; --r-sm:11px;
+  --shadow:0 1px 2px rgba(20,35,25,.06), 0 12px 30px -16px rgba(20,35,25,.28);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121714; --surface:#1b221d; --surface-2:#242d27; --line:#2f3a33;
+    --ink:#e8eee9; --muted:#a3b0a7; --soft:#76837a;
+    --accent:#6fbf96; --accent-ink:#0e1a13; --accent-soft:#1f3a2c;
+    --warn:#e6a35b; --warn-soft:#3b2a17; --over:#ee7a6c; --over-soft:#3d1f1b;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -16px rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121714; --surface:#1b221d; --surface-2:#242d27; --line:#2f3a33;
+  --ink:#e8eee9; --muted:#a3b0a7; --soft:#76837a;
+  --accent:#6fbf96; --accent-ink:#0e1a13; --accent-soft:#1f3a2c;
+  --warn:#e6a35b; --warn-soft:#3b2a17; --over:#ee7a6c; --over-soft:#3d1f1b;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -16px rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 var(--f-body);-webkit-tap-highlight-color:transparent;
+  padding-top:env(safe-area-inset-top,0px)}
+[hidden]{display:none!important}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+.wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:12px calc(150px + env(safe-area-inset-bottom,0px))}
+
+/* date bar */
+.datebar{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.iconbtn{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;flex:none}
+.iconbtn svg{width:18px;height:18px}
+.datebar .d{flex:1;min-width:0;text-align:center}
+.datebar .d b{display:block;font:700 1.15rem/1.2 var(--f-display);letter-spacing:-.01em}
+.datebar .d span{font-size:.82rem;color:var(--muted)}
+.today-link{border:0;background:none;color:var(--accent);font-weight:600;font-size:.82rem;padding:0 0 0 4px}
+
+/* summary */
+.summary{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:18px;display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}
+.dial{width:118px;height:118px;position:relative}
+.dial svg{width:100%;height:100%;transform:rotate(-90deg)}
+.dial .track{stroke:var(--surface-2)}
+.dial .bar{stroke:var(--accent);transition:stroke-dashoffset .5s ease, stroke .3s}
+.summary.warn .dial .bar{stroke:var(--warn)}
+.summary.over .dial .bar{stroke:var(--over)}
+.dial .mid{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.dial .mid b{font:800 1.75rem/1 var(--f-display);letter-spacing:-.02em}
+.dial .mid span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+.stats{display:grid;gap:8px;min-width:0}
+.stat{display:flex;justify-content:space-between;gap:8px;font-size:.92rem;border-bottom:1px dashed var(--line);padding-bottom:6px}
+.stat:last-child{border-bottom:0;padding-bottom:0}
+.stat span{color:var(--muted)}
+.stat b{font-weight:700}
+.pill{display:inline-block;font-size:.75rem;font-weight:700;padding:3px 9px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+.summary.warn .pill{background:var(--warn-soft);color:var(--warn)}
+.summary.over .pill{background:var(--over-soft);color:var(--over)}
+
+/* list */
+.section-h{display:flex;justify-content:space-between;align-items:baseline;margin:22px 2px 8px}
+.section-h h2{margin:0;font:700 .78rem/1 var(--f-body);text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.section-h small{color:var(--soft);font-size:.8rem}
+.list{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.row{display:flex;align-items:center;gap:10px;padding:11px 12px 11px 14px;border-bottom:1px solid var(--line);min-height:58px}
+.row:last-child{border-bottom:0}
+.row .main{flex:1;min-width:0;border:0;background:none;text-align:left;padding:0}
+.row .name{font-weight:600;overflow-wrap:anywhere}
+.row .sub{font-size:.8rem;color:var(--muted)}
+.row .kcal{font-weight:700;white-space:nowrap;min-width:58px;text-align:right}
+.step{display:flex;align-items:center;border:1px solid var(--line);border-radius:99px;flex:none}
+.step button{width:32px;height:32px;border:0;background:none;font-size:1.1rem;line-height:1;color:var(--accent);font-weight:700}
+.step .q{min-width:22px;text-align:center;font-size:.9rem;font-weight:600}
+.empty{padding:28px 18px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font:700 1.05rem var(--f-display);margin-bottom:4px}
+
+/* bottom bar */
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-top:1px solid var(--line);padding:10px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.bottom-in{max-width:560px;margin:0 auto;display:grid;gap:8px}
+.addbtn{height:52px;border:0;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:1.02rem;display:flex;align-items:center;justify-content:center;gap:8px}
+.addbtn svg{width:20px;height:20px}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr)}
+.tab{border:0;background:none;padding:6px 0;font-size:.78rem;font-weight:600;color:var(--soft);display:grid;justify-items:center;gap:2px}
+.tab svg{width:20px;height:20px}
+.tab[aria-selected="true"]{color:var(--accent)}
+
+/* products & history */
+.search{width:100%;height:46px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:0 14px;font-size:1rem}
+.toolbar{display:flex;gap:8px;margin-bottom:10px}
+.toolbar .search{flex:1;min-width:0}
+.ghost{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:0 14px;height:46px;font-weight:600;color:var(--accent);flex:none}
+.bars{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 14px 10px}
+.hrow{display:grid;grid-template-columns:74px 1fr 64px;gap:10px;align-items:center;padding:7px 0;border:0;background:none;width:100%;text-align:left}
+.hrow .lbl{font-size:.85rem;color:var(--muted)}
+.hrow .lbl b{color:var(--ink);font-weight:600}
+.hrow .track{height:12px;border-radius:99px;background:var(--surface-2);position:relative;overflow:hidden}
+.hrow .fill{position:absolute;inset:0 auto 0 0;border-radius:99px;background:var(--accent)}
+.hrow .fill.warn{background:var(--warn)} .hrow .fill.over{background:var(--over)}
+.hrow .goal{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.35}
+.hrow .v{text-align:right;font-weight:700;font-size:.9rem}
+.avg{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.avg div{flex:1 1 120px;background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;box-shadow:var(--shadow)}
+.avg span{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.avg b{font:800 1.35rem var(--f-display)}
+.card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);padding:16px;display:grid;gap:12px}
+.card p{margin:0;color:var(--muted);font-size:.9rem}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.btnrow .ghost{flex:1 1 140px}
+
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(10,20,14,.42);z-index:40;opacity:0;transition:opacity .2s}
+.scrim.on{opacity:1}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--bg);border-radius:20px 20px 0 0;max-height:88vh;display:flex;flex-direction:column;
+  transform:translateY(100%);transition:transform .25s ease;box-shadow:0 -10px 40px rgba(0,0,0,.2)}
+.sheet.on{transform:none}
+.sheet-in{max-width:560px;width:100%;margin:0 auto;display:flex;flex-direction:column;min-height:0;
+  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.grab{width:40px;height:5px;border-radius:9px;background:var(--line);margin:4px auto 10px}
+.sheet h3{margin:0 0 12px;font:700 1.25rem var(--f-display);display:flex;justify-content:space-between;align-items:center}
+.sheet h3 button{border:0;background:none;color:var(--muted);font:600 .9rem var(--f-body)}
+.pick{overflow:auto;margin-top:10px;background:var(--surface);border-radius:var(--r);min-height:0;flex:1}
+.prow{display:flex;align-items:center;gap:10px;width:100%;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;padding:12px 14px;min-height:54px}
+.prow:last-child{border-bottom:0}
+.prow .name{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}
+.prow .k{color:var(--muted);font-size:.88rem;white-space:nowrap}
+.prow .plus{width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:800;flex:none}
+.prow.new .name{color:var(--accent)}
+.field{display:grid;gap:5px}
+.field label{font-size:.8rem;font-weight:600;color:var(--muted)}
+.field input{height:48px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:0 14px;font-size:1.05rem;width:100%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form{display:grid;gap:12px}
+.check{display:flex;gap:10px;align-items:center;font-size:.92rem}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.primary{height:50px;border:0;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:1rem}
+.danger{height:46px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--over);font-weight:600}
+.hint{font-size:.85rem;color:var(--muted);margin:0}
+.preview{font-size:.95rem;color:var(--muted)} .preview b{color:var(--ink)}
+
+.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;z-index:60;
+  background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:12px;display:flex;gap:14px;align-items:center;font-size:.92rem;transition:.2s;max-width:calc(100% - 32px);pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast button{border:0;background:none;color:var(--accent-soft);font-weight:700;padding:0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <!-- DIARY -->
+  <section id="view-day">
+    <div class="datebar">
+      <button class="iconbtn" id="prev" aria-label="Poprzedni dzień"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="d"><b id="dateMain">Dziś</b><span id="dateSub"></span></div>
+      <button class="iconbtn" id="next" aria-label="Następny dzień"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+
+    <div class="summary" id="summary">
+      <div class="dial">
+        <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52" fill="none" stroke-width="12"/><circle class="bar" id="dialBar" cx="60" cy="60" r="52" fill="none" stroke-width="12" stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73"/></svg>
+        <div class="mid"><b class="num" id="eaten">0</b><span>kcal</span></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><span>Cel dzienny</span><b class="num" id="goalTxt">2000</b></div>
+        <div class="stat"><span id="leftLbl">Zostało</span><b class="num" id="leftTxt">2000</b></div>
+        <div><span class="pill" id="pill">W normie</span></div>
+      </div>
+    </div>
+
+    <div class="section-h"><h2>Zjedzone</h2><small id="countTxt"></small></div>
+    <div class="list" id="entries"></div>
+  </section>
+
+  <!-- PRODUCTS -->
+  <section id="view-products" hidden>
+    <div class="section-h" style="margin-top:4px"><h2>Moje produkty</h2><small id="prodCount"></small></div>
+    <div class="toolbar">
+      <input class="search" id="prodSearch" type="search" placeholder="Szukaj produktu…" autocomplete="off">
+      <button class="ghost" id="prodNew">+ Nowy</button>
+    </div>
+    <p class="hint" style="margin:0 2px 10px">Kalorie podane są na 1 porcję. Dotknij produktu, żeby go poprawić.</p>
+    <div class="list" id="prodList"></div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="view-history" hidden>
+    <div class="section-h" style="margin-top:4px"><h2>Ostatnie 14 dni</h2><small>dotknij dnia, aby go otworzyć</small></div>
+    <div class="avg">
+      <div><span>Średnio / dzień</span><b class="num" id="avg7">–</b></div>
+      <div><span>Dni z wpisami</span><b class="num" id="daysCnt">–</b></div>
+    </div>
+    <div class="bars" id="bars"></div>
+
+    <div class="section-h"><h2>Ustawienia</h2></div>
+    <div class="card">
+      <div class="field"><label for="goalInput">Dzienny cel (kcal)</label><input id="goalInput" type="number" inputmode="numeric" min="500" max="6000" step="50"></div>
+      <p>Dane zapisują się tylko na tym telefonie. Co jakiś czas zrób kopię zapasową.</p>
+      <div class="btnrow">
+        <button class="ghost" id="exportBtn">Zapisz kopię</button>
+        <button class="ghost" id="importBtn">Wczytaj kopię</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="bottom">
+  <div class="bottom-in">
+    <button class="addbtn" id="openAdd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Dodaj do dnia</button>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-view="day" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Dziennik</button>
+      <button class="tab" role="tab" data-view="products" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Produkty</button>
+      <button class="tab" role="tab" data-view="history" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Historia</button>
+    </div>
+  </div>
+</nav>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<!-- Add sheet -->
+<div class="sheet" id="addSheet" hidden role="dialog" aria-label="Dodaj produkt">
+  <div class="sheet-in" style="flex:1">
+    <div class="grab"></div>
+    <h3><span id="addTitle">Dodaj</span><button data-close>Gotowe</button></h3>
+    <input class="search" id="addSearch" type="search" placeholder="Wpisz nazwę, np. skyr…" autocomplete="off">
+    <div class="pick" id="pickList"></div>
+  </div>
+</div>
+
+<!-- Form sheet (new product / edit entry / edit product) -->
+<div class="sheet" id="formSheet" hidden role="dialog" aria-labelledby="formTitle">
+  <div class="sheet-in">
+    <div class="grab"></div>
+    <h3><span id="formTitle">Nowy produkt</span><button data-close>Anuluj</button></h3>
+    <form class="form" id="form" novalidate>
+      <div class="field"><label for="fName">Nazwa</label><input id="fName" autocomplete="off" required></div>
+      <div class="grid2">
+        <div class="field"><label for="fKcal">kcal na porcję</label><input id="fKcal" type="number" inputmode="decimal" step="any" min="0" required></div>
+        <div class="field" id="qtyField"><label for="fQty">Ile porcji</label><input id="fQty" type="number" inputmode="decimal" step="any" min="0" value="1"></div>
+      </div>
+      <p class="preview" id="fPreview"></p>
+      <label class="check" id="saveWrap"><input type="checkbox" id="fSave" checked> Zapisz na liście produktów</label>
+      <button class="primary" id="fSubmit" type="submit">Dodaj</button>
+      <button class="danger" id="fDelete" type="button" hidden>Usuń</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"><span id="toastMsg"></span><button id="toastUndo" hidden>Cofnij</button></div>
+
+<script>
+(function(){
+"use strict";
+const KEY = "kalorie.v1";
+// Lista produktów startowych przeniesiona z arkusza produkty_kaloriev2.xlsx
+const SEED = {"products":[["2x hamburger",516],["3 kromki razowego",85],["3x razowa",126],["Banan",100],["Banany",200],["Bulka codzienna",234],["Ciastka",59.75],["Croissant z czekoladą",364],["Czekoladka",52],["Drożdżówka",150],["Drożdżówka z serem",250],["Fantazja",202.8],["Frytki",230],["Grissini",27],["Grochowa",270],["Hotdog",150],["Jajko",50],["Jajko x2",100],["Jogurty x2",262.5],["Kabanosy",159],["Kanapka",150],["Kanapka z wedlina",160],["Kanapki x2",350],["Kanapki z wedlinabi majonezem",320],["Kostka piernikowa",130],["Kromka bialego",70],["Kromka ciemnego",35],["Kromka razowego",28.33],["Kromki bialego",140],["Kromki bialego x2",140],["Makrela z jajkiem",150],["Merci",50],["Obiad",350],["Obiad ryz ryba warzywa",267],["Obwazanek",19],["Parowka",100],["Parowka x2",207],["Parowki",120],["Parowki x3",300],["Parówka berlinka",103],["Piers z kurczaka, ziemniaki i surówka",500],["Pół Pawełka",104],["Rosół",250],["Rosół z makaronem",250],["Sałata z łososiem",150],["Serek wiejski połowa",50],["Skedziki na raz",309],["Skyr",117],["Spaghetti",400],["Tubka ryzanka z jogurtem",120],["Wafel holenderski",320],["Wafle holenderskie",160],["Wianek",120],["Zapiekanka",406.08],["Zupa",65]],
+"days":{}};
+
+const $ = s => document.querySelector(s);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/ł/g,"l").trim();
+const fmt = n => Math.round(n).toLocaleString("pl-PL");
+const fmtQ = q => (Math.round(q*100)/100).toLocaleString("pl-PL");
+const pad = n => String(n).padStart(2,"0");
+const iso = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const fromIso = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d); };
+const addDays = (s,n) => { const d = fromIso(s); d.setDate(d.getDate()+n); return iso(d); };
+
+// ---------- state ----------
+function seedState(){
+  const st = {goal:2000, products:[], days:{}};
+  st.products = SEED.products.map(([name,kcal]) => ({id:uid(), name, kcal}));
+  for (const [day, items] of Object.entries(SEED.days))
+    st.days[day] = items.map(([name,kcal,qty]) => ({id:uid(), name, kcal, qty}));
+  return st;
+}
+let S;
+try { S = JSON.parse(localStorage.getItem(KEY)); } catch(e) { S = null; }
+if (!S || !Array.isArray(S.products)) S = seedState();
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
+save();
+
+let cur = iso(new Date());
+let view = "day";
+
+const dayItems = d => S.days[d] || [];
+const dayTotal = d => dayItems(d).reduce((a,e) => a + e.kcal*e.qty, 0);
+
+// how often each product name was eaten -> sort the picker by habit
+function usage(){
+  const m = {};
+  for (const items of Object.values(S.days)) for (const e of items) { const k = norm(e.name); m[k] = (m[k]||0) + 1; }
+  return m;
+}
+
+// ---------- diary ----------
+const DIAL = 2*Math.PI*52;
+function renderDay(){
+  const d = fromIso(cur), today = iso(new Date());
+  const rel = cur === today ? "Dziś" : cur === addDays(today,-1) ? "Wczoraj" : cur === addDays(today,1) ? "Jutro" : null;
+  const long = d.toLocaleDateString("pl-PL",{weekday:"long", day:"numeric", month:"long"});
+  $("#dateMain").textContent = rel || long.charAt(0).toUpperCase()+long.slice(1);
+  $("#dateSub").innerHTML = (rel ? esc(long) : esc(d.getFullYear())) + (cur !== today ? ' · <button class="today-link" id="goToday">wróć do dziś</button>' : "");
+  const tb = $("#goToday"); if (tb) tb.onclick = () => { cur = today; renderDay(); };
+
+  const total = dayTotal(cur), goal = S.goal || 2000, left = goal - total;
+  const pct = total/goal;
+  $("#eaten").textContent = fmt(total);
+  $("#goalTxt").textContent = fmt(goal) + " kcal";
+  $("#leftLbl").textContent = left >= 0 ? "Zostało" : "Ponad cel";
+  $("#leftTxt").textContent = fmt(Math.abs(left)) + " kcal";
+  $("#dialBar").style.strokeDashoffset = DIAL * (1 - Math.min(pct,1));
+  const sm = $("#summary"); sm.classList.toggle("warn", pct > .9 && pct <= 1); sm.classList.toggle("over", pct > 1);
+  $("#pill").textContent = pct > 1 ? "Przekroczony cel" : pct > .9 ? "Blisko celu" : total === 0 ? "Pusty dzień" : Math.round(pct*100) + "% celu";
+
+  const items = dayItems(cur);
+  $("#countTxt").textContent = items.length ? items.length + " " + plural(items.length,"pozycja","pozycje","pozycji") : "";
+  const box = $("#entries");
+  if (!items.length){
+    box.innerHTML = '<div class="empty"><b>Nic jeszcze nie ma</b>Dotknij „Dodaj do dnia” i wybierz produkt z listy albo wpisz nowy.</div>';
+    return;
+  }
+  box.innerHTML = items.map(e => `
+    <div class="row" data-id="${e.id}">
+      <button class="main" data-edit="${e.id}"><div class="name">${esc(e.name)}</div><div class="sub num">${fmtQ(e.kcal)} kcal × ${fmtQ(e.qty)}</div></button>
+      <div class="step"><button data-dec="${e.id}" aria-label="Mniej">−</button><span class="q num">${fmtQ(e.qty)}</span><button data-inc="${e.id}" aria-label="Więcej">+</button></div>
+      <div class="kcal num">${fmt(e.kcal*e.qty)}</div>
+    </div>`).join("");
+}
+function plural(n,a,b,c){ const t=n%10, h=n%100; return n===1?a:(t>=2&&t<=4&&(h<12||h>14))?b:c; }
+
+$("#entries").addEventListener("click", ev => {
+  const t = ev.target.closest("button"); if (!t) return;
+  const items = dayItems(cur);
+  if (t.dataset.inc){ const e = items.find(x=>x.id===t.dataset.inc); e.qty = Math.floor(e.qty)+1; save(); renderDay(); }
+  else if (t.dataset.dec){
+    const i = items.findIndex(x=>x.id===t.dataset.dec), e = items[i];
+    if (e.qty > 1) { e.qty = Math.ceil(e.qty)-1; save(); renderDay(); }
+    else removeEntry(i);
+  }
+  else if (t.dataset.edit) openEntryForm(items.find(x=>x.id===t.dataset.edit));
+});
+function removeEntry(i){
+  const day = cur, items = dayItems(day), [e] = items.splice(i,1);
+  if (!items.length) delete S.days[day];
+  save(); renderDay();
+  toast("Usunięto: " + e.name, () => { (S.days[day] ||= []).splice(i,0,e); save(); render(); });
+}
+$("#prev").onclick = () => { cur = addDays(cur,-1); renderDay(); };
+$("#next").onclick = () => { cur = addDays(cur,1); renderDay(); };
+
+// ---------- sheets ----------
+let openSheet = null;
+function showSheet(el){
+  if (openSheet && openSheet !== el) hideSheet(openSheet, true);
+  const sc = $("#scrim"); sc.hidden = false; el.hidden = false;
+  requestAnimationFrame(() => { sc.classList.add("on"); el.classList.add("on"); });
+  openSheet = el;
+}
+function hideSheet(el, keepScrim){
+  el = el || openSheet; if (!el) return;
+  el.classList.remove("on"); setTimeout(() => { if (!el.classList.contains("on")) el.hidden = true; }, 260);
+  if (!keepScrim){ const sc=$("#scrim"); sc.classList.remove("on"); setTimeout(()=>{ if(!sc.classList.contains("on")) sc.hidden = true; },220); }
+  if (openSheet === el) openSheet = null;
+}
+$("#scrim").onclick = () => { hideSheet(); render(); };
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => { hideSheet(); render(); });
+
+// ---------- add sheet ----------
+function openAdd(){
+  if (view !== "day") setView("day");
+  const dd = fromIso(cur); $("#addTitle").textContent = "Dodaj · " + dd.getDate() + "." + pad(dd.getMonth()+1);
+  $("#addSearch").value = ""; renderPick(); showSheet($("#addSheet"));
+  setTimeout(() => $("#addSearch").focus(), 260);
+}
+function renderPick(){
+  const q = norm($("#addSearch").value), u = usage();
+  let list = S.products.filter(p => !q || norm(p.name).includes(q));
+  list.sort((a,b) => (u[norm(b.name)]||0) - (u[norm(a.name)]||0) || a.name.localeCompare(b.name,"pl"));
+  const raw = $("#addSearch").value.trim();
+  const exact = S.products.some(p => norm(p.name) === q);
+  let html = "";
+  if (raw && !exact) html += `<button class="prow new" data-new="1"><span class="plus">+</span><span class="name">Nowy produkt: „${esc(raw)}”</span></button>`;
+  html += list.map(p => `<button class="prow" data-pid="${p.id}"><span class="name">${esc(p.name)}</span><span class="k num">${fmtQ(p.kcal)} kcal</span><span class="plus">+</span></button>`).join("");
+  if (!raw && !list.length) html = '<div class="empty"><b>Lista jest pusta</b>Wpisz nazwę, żeby dodać pierwszy produkt.</div>';
+  $("#pickList").innerHTML = html;
+}
+$("#addSearch").addEventListener("input", renderPick);
+$("#pickList").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  if (b.dataset.new){ openNewForm($("#addSearch").value.trim(), true); return; }
+  const p = S.products.find(x => x.id === b.dataset.pid);
+  addEntry(p.name, p.kcal, 1);
+  toast("Dodano: " + p.name + " (" + fmt(p.kcal) + " kcal)");
+});
+function addEntry(name, kcal, qty){
+  const items = (S.days[cur] ||= []);
+  const same = items.find(e => norm(e.name) === norm(name) && e.kcal === kcal);
+  if (same) same.qty += qty; else items.push({id:uid(), name, kcal, qty});
+  save(); renderDay();
+}
+$("#openAdd").onclick = openAdd;
+
+// ---------- form sheet ----------
+let formMode = null, formTarget = null, formBack = false;
+function setupForm({title, name="", kcal="", qty=1, showQty, showSave, submit, del}){
+  $("#formTitle").textContent = title;
+  $("#fName").value = name; $("#fKcal").value = kcal === "" ? "" : String(kcal); $("#fQty").value = String(qty);
+  $("#qtyField").hidden = !showQty; $("#saveWrap").hidden = !showSave; $("#fSave").checked = true;
+  $("#fSubmit").textContent = submit; $("#fDelete").hidden = !del;
+  updatePreview(); showSheet($("#formSheet"));
+}
+function openNewForm(name, fromAdd){
+  formMode = "new"; formTarget = null; formBack = !!fromAdd;
+  setupForm({title:"Nowy produkt", name, showQty:true, showSave:true, submit:"Dodaj do dnia"});
+  setTimeout(() => (name ? $("#fKcal") : $("#fName")).focus(), 260);
+}
+function openEntryForm(e){
+  formMode = "entry"; formTarget = e; formBack = false;
+  setupForm({title:"Popraw wpis", name:e.name, kcal:e.kcal, qty:e.qty, showQty:true, showSave:false, submit:"Zapisz", del:true});
+}
+function openProductForm(p){
+  formMode = p ? "product" : "newproduct"; formTarget = p; formBack = false;
+  setupForm({title: p ? "Edytuj produkt" : "Nowy produkt", name:p?p.name:"", kcal:p?p.kcal:"", showQty:false, showSave:false, submit: p ? "Zapisz" : "Dodaj do listy", del:!!p});
+  if (!p) setTimeout(() => $("#fName").focus(), 260);
+}
+function updatePreview(){
+  const k = parseFloat(String($("#fKcal").value).replace(",",".")), q = parseFloat(String($("#fQty").value).replace(",","."));
+  $("#fPreview").innerHTML = (!$("#qtyField").hidden && k >= 0 && q > 0) ? `Razem: <b class="num">${fmt(k*q)} kcal</b>` : "";
+}
+["#fKcal","#fQty"].forEach(s => $(s).addEventListener("input", updatePreview));
+$("#form").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const name = $("#fName").value.trim().replace(/\s+/g," ");
+  const kcal = parseFloat(String($("#fKcal").value).replace(",","."));
+  const qty = parseFloat(String($("#fQty").value).replace(",","."));
+  if (!name){ $("#fName").focus(); toast("Wpisz nazwę produktu"); return; }
+  if (!(kcal >= 0)){ $("#fKcal").focus(); toast("Wpisz liczbę kalorii"); return; }
+  if (!$("#qtyField").hidden && !(qty > 0)){ $("#fQty").focus(); toast("Liczba porcji musi być większa od zera"); return; }
+  const nice = name.charAt(0).toUpperCase() + name.slice(1);
+  if (formMode === "new"){
+    if ($("#fSave").checked){
+      const ex = S.products.find(p => norm(p.name) === norm(nice));
+      if (ex) ex.kcal = kcal; else S.products.push({id:uid(), name:nice, kcal});
+    }
+    addEntry(nice, kcal, qty);
+    toast("Dodano: " + nice);
+    if (formBack){ $("#addSearch").value = ""; renderPick(); showSheet($("#addSheet")); } else { hideSheet(); }
+  } else if (formMode === "entry"){
+    Object.assign(formTarget, {name:nice, kcal, qty}); save(); hideSheet(); render();
+  } else if (formMode === "product"){
+    Object.assign(formTarget, {name:nice, kcal}); save(); hideSheet(); render(); toast("Zapisano produkt");
+  } else if (formMode === "newproduct"){
+    if (S.products.some(p => norm(p.name) === norm(nice))){ toast("Taki produkt już jest na liście"); return; }
+    S.products.push({id:uid(), name:nice, kcal}); save(); hideSheet(); render(); toast("Dodano do listy: " + nice);
+  }
+  save();
+});
+$("#fDelete").onclick = () => {
+  if (formMode === "entry"){
+    const i = dayItems(cur).indexOf(formTarget); hideSheet(); if (i >= 0) removeEntry(i);
+  } else if (formMode === "product"){
+    const i = S.products.indexOf(formTarget), p = formTarget;
+    S.products.splice(i,1); save(); hideSheet(); render();
+    toast("Usunięto z listy: " + p.name, () => { S.products.splice(i,0,p); save(); render(); });
+  }
+};
+
+// ---------- products view ----------
+function renderProducts(){
+  const q = norm($("#prodSearch").value);
+  const list = S.products.filter(p => !q || norm(p.name).includes(q)).sort((a,b) => a.name.localeCompare(b.name,"pl"));
+  $("#prodCount").textContent = S.products.length + " " + plural(S.products.length,"produkt","produkty","produktów");
+  $("#prodList").innerHTML = list.length ? list.map(p => `<button class="prow" data-pid="${p.id}"><span class="name">${esc(p.name)}</span><span class="k num">${fmtQ(p.kcal)} kcal</span></button>`).join("")
+    : '<div class="empty"><b>Brak wyników</b>Dodaj produkt przyciskiem „+ Nowy”.</div>';
+}
+$("#prodSearch").addEventListener("input", renderProducts);
+$("#prodList").addEventListener("click", ev => { const b = ev.target.closest("button[data-pid]"); if (b) openProductForm(S.products.find(p => p.id === b.dataset.pid)); });
+$("#prodNew").onclick = () => openProductForm(null);
+
+// ---------- history view ----------
+function renderHistory(){
+  const today = iso(new Date()), goal = S.goal || 2000, rows = [];
+  for (let i = 0; i < 14; i++) rows.push(addDays(today,-i));
+  const totals = rows.map(dayTotal);
+  const max = Math.max(goal*1.25, ...totals);
+  $("#bars").innerHTML = rows.map((d,i) => {
+    const t = totals[i], dt = fromIso(d), r = t/goal;
+    const lbl = i === 0 ? "Dziś" : dt.toLocaleDateString("pl-PL",{weekday:"short"});
+    return `<button class="hrow" data-day="${d}"><span class="lbl"><b>${esc(lbl)}</b> ${dt.getDate()}.${pad(dt.getMonth()+1)}</span>
+      <span class="track"><span class="fill ${r>1?"over":r>.9?"warn":""}" style="width:${(t/max*100).toFixed(1)}%"></span><span class="goal" style="left:${(goal/max*100).toFixed(1)}%"></span></span>
+      <span class="v num">${t ? fmt(t) : "–"}</span></button>`;
+  }).join("");
+  const filled = Object.keys(S.days).filter(d => dayItems(d).length && d <= today).sort().reverse().slice(0,7);
+  $("#avg7").textContent = filled.length ? fmt(filled.reduce((a,d)=>a+dayTotal(d),0)/filled.length) + " kcal" : "–";
+  $("#daysCnt").textContent = Object.keys(S.days).filter(d => dayItems(d).length).length;
+  $("#avg7").previousElementSibling.textContent = "Średnio (ost. " + (filled.length||7) + " dni)";
+  $("#goalInput").value = goal;
+}
+$("#bars").addEventListener("click", ev => { const b = ev.target.closest("[data-day]"); if (b){ cur = b.dataset.day; setView("day"); } });
+$("#goalInput").addEventListener("change", () => {
+  const g = parseInt($("#goalInput").value,10);
+  if (g >= 500 && g <= 10000){ S.goal = g; save(); render(); toast("Cel ustawiony: " + fmt(g) + " kcal"); }
+  else { $("#goalInput").value = S.goal; toast("Podaj cel między 500 a 10 000 kcal"); }
+});
+$("#exportBtn").onclick = () => {
+  const blob = new Blob([JSON.stringify(S,null,1)], {type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "kalorie-kopia-" + iso(new Date()) + ".json";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast("Kopia zapisana w Pobranych");
+};
+$("#importBtn").onclick = () => $("#importFile").click();
+$("#importFile").addEventListener("change", ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!Array.isArray(d.products) || typeof d.days !== "object") throw 0;
+      const prev = S; S = d; save(); render();
+      toast("Wczytano kopię", () => { S = prev; save(); render(); });
+    } catch(e){ toast("To nie jest plik kopii z tej aplikacji"); }
+    ev.target.value = "";
+  };
+  r.readAsText(f);
+});
+
+// ---------- views ----------
+function setView(v){
+  view = v;
+  for (const n of ["day","products","history"]) $("#view-"+n).hidden = n !== v;
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.view === v));
+  render(); window.scrollTo(0,0);
+}
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => setView(t.dataset.view));
+function render(){ if (view==="day") renderDay(); else if (view==="products") renderProducts(); else renderHistory(); }
+
+// ---------- toast ----------
+let tTimer;
+function toast(msg, undo){
+  $("#toastMsg").textContent = msg;
+  const u = $("#toastUndo"); u.hidden = !undo; u.onclick = () => { undo(); $("#toast").classList.remove("on"); };
+  $("#toast").classList.add("on"); clearTimeout(tTimer);
+  tTimer = setTimeout(() => $("#toast").classList.remove("on"), undo ? 5000 : 2200);
+}
+
+// refresh "today" when the app is reopened on a new day
+let lastToday = iso(new Date());
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  const t = iso(new Date()); if (t !== lastToday){ if (cur === lastToday) cur = t; lastToday = t; render(); }
+});
+
+render();
+
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  try { navigator.serviceWorker.register("sw.js").catch(()=>{}); } catch(e) {}
+}
+})();
+</script>
+</body>
+</html>
